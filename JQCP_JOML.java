@@ -2,8 +2,7 @@ import org.joml.Matrix3d;
 import org.joml.Vector3d;
 
 /*******************************************************************************
- * Code translated from C to Java by Luke Hutchison,
- * and ported to JOML linear algebra library ( https://github.com/JOML-CI/JOML )
+ * Code translated from C to Java by Luke Hutchison, and ported to the JOML linear algebra library.
  * 
  * Original code: https://theobald.brandeis.edu/qcp/
  * 
@@ -125,16 +124,16 @@ public class JQCP_JOML {
      * @param len     the size of the system
      * @param weight  the weight array of size len, or null to use unweighted coordinates.
      * 
-     * @param AOut    out parameter (double[9]): the inner product matrix
+     * @param AOut    out parameter: the inner product matrix
      * 
      * @return (G1 + G2) * 0.5; used as E0 in function
      *         {@link #FastCalcRMSDAndRotation(double[], double[], double[], double, double, double)}.
      */
     private static double innerProduct(Vector3d[] coords1, Vector3d[] coords2, int len, double[] weight,
-            double[] AOut) {
+            Matrix3d AOut) {
         double G1 = 0.0, G2 = 0.0;
 
-        AOut[0] = AOut[1] = AOut[2] = AOut[3] = AOut[4] = AOut[5] = AOut[6] = AOut[7] = AOut[8] = 0.0;
+        AOut.zero();
 
         if (weight != null) {
             for (int i = 0; i < len; ++i) {
@@ -150,17 +149,17 @@ public class JQCP_JOML {
 
                 G2 += weight[i] * (x2 * x2 + y2 * y2 + z2 * z2);
 
-                AOut[0] += (x1 * x2);
-                AOut[1] += (x1 * y2);
-                AOut[2] += (x1 * z2);
+                AOut.m00 += (x1 * x2);
+                AOut.m10 += (x1 * y2);
+                AOut.m20 += (x1 * z2);
 
-                AOut[3] += (y1 * x2);
-                AOut[4] += (y1 * y2);
-                AOut[5] += (y1 * z2);
+                AOut.m01 += (y1 * x2);
+                AOut.m11 += (y1 * y2);
+                AOut.m21 += (y1 * z2);
 
-                AOut[6] += (z1 * x2);
-                AOut[7] += (z1 * y2);
-                AOut[8] += (z1 * z2);
+                AOut.m02 += (z1 * x2);
+                AOut.m12 += (z1 * y2);
+                AOut.m22 += (z1 * z2);
             }
         } else {
             for (int i = 0; i < len; ++i) {
@@ -176,17 +175,17 @@ public class JQCP_JOML {
 
                 G2 += (x2 * x2 + y2 * y2 + z2 * z2);
 
-                AOut[0] += (x1 * x2);
-                AOut[1] += (x1 * y2);
-                AOut[2] += (x1 * z2);
+                AOut.m00 += (x1 * x2);
+                AOut.m10 += (x1 * y2);
+                AOut.m20 += (x1 * z2);
 
-                AOut[3] += (y1 * x2);
-                AOut[4] += (y1 * y2);
-                AOut[5] += (y1 * z2);
+                AOut.m01 += (y1 * x2);
+                AOut.m11 += (y1 * y2);
+                AOut.m21 += (y1 * z2);
 
-                AOut[6] += (z1 * x2);
-                AOut[7] += (z1 * y2);
-                AOut[8] += (z1 * z2);
+                AOut.m02 += (z1 * x2);
+                AOut.m12 += (z1 * y2);
+                AOut.m22 += (z1 * z2);
             }
         }
 
@@ -209,22 +208,22 @@ public class JQCP_JOML {
      *         smaller than the threshold of precision); or a value greater than 0 if both the RMSD and rotational
      *         matrix were calculated.
      */
-    public static int fastCalcRMSDAndRotation(double[] A, double E0, double len, double minScore, Matrix3d rotOut,
+    public static int fastCalcRMSDAndRotation(Matrix3d A, double E0, double len, double minScore, Matrix3d rotOut,
             double[] rmsdOut) {
 
         double evecprec = 1e-6;
         double evalprec = 1e-11;
         int maxIter = 50;
 
-        double Sxx = A[0];
-        double Sxy = A[1];
-        double Sxz = A[2];
-        double Syx = A[3];
-        double Syy = A[4];
-        double Syz = A[5];
-        double Szx = A[6];
-        double Szy = A[7];
-        double Szz = A[8];
+        double Sxx = A.m00;
+        double Sxy = A.m10;
+        double Sxz = A.m20;
+        double Syx = A.m01;
+        double Syy = A.m11;
+        double Syz = A.m21;
+        double Szx = A.m02;
+        double Szy = A.m12;
+        double Szz = A.m22;
 
         double Sxx2 = Sxx * Sxx;
         double Syy2 = Syy * Syy;
@@ -484,7 +483,7 @@ public class JQCP_JOML {
         }
 
         /* calculate the (weighted) inner product of two structures */
-        double[] A = new double[9];
+        Matrix3d A = new Matrix3d();
         double E0 = innerProduct(coords1, coords2, len, weight, A);
 
         /* calculate the RMSD & rotational matrix */
