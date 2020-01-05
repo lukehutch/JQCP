@@ -196,7 +196,7 @@ public class JQCP_JOML {
     /**
      * Calculate the RMSD, and/or the optimal rotation matrix.
      * 
-     * @param A        the inner product of two structures (double[9])
+     * @param A        the inner product of two structures
      * @param E0       (G1 + G2) * 0.5
      * @param len      the size of the system
      * @param minScore if( minScore > 0 && rmsd < minScore) then calculate only the rmsd; otherwise, calculate both
