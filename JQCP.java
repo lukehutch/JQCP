@@ -1,5 +1,3 @@
-package slam.reg.rotation;
-
 /*******************************************************************************
  * Code translated from C to Java by Luke Hutchison.
  * 
