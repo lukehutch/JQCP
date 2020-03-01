@@ -1,8 +1,16 @@
+package slam.reg.rotation;
+
+import java.util.Arrays;
+
+import org.joml.AxisAngle4f;
 import org.joml.Matrix3d;
+import org.joml.Quaterniond;
+import org.joml.Quaternionf;
 import org.joml.Vector3d;
+import org.joml.Vector3f;
 
 /*******************************************************************************
- * Code translated from C to Java by Luke Hutchison, and ported to the JOML linear algebra library.
+ * Code translated from C to Java by Luke Hutchison, and ported to JOML linear algebra library.
  * 
  * Original code: https://theobald.brandeis.edu/qcp/
  * 
@@ -101,77 +109,71 @@ import org.joml.Vector3d;
 public class JQCP_JOML {
     /**
      * Calculate the inner product of two structures. If weight array is not null, calculate the weighted inner
-     * product.
+     * product. You must calculate the centroid of the structures coords1 and coords2, before calling this function.
      * 
-     * Warning:
+     * @param coords1      reference structure
+     * @param centroid1    the centroid of coords1
+     * @param coords2      candidate structure
+     * @param centroid2    the centroid of coords2
+     * @param idxsToUse    the indices in the coords1, coords2 and weight arrays to use.
+     * @param numIdxsToUse the number of entries in idxsToUse.
+     * @param weight       the weight array of size len, or null to use unweighted coordinates.
      * 
-     * 1. You MUST center the structures, coords1 and coords2, before calling this function.
-     * 
-     * 2. Please note how the structure coordinates are stored in the double **coords arrays. They are 3xN arrays,
-     * not Nx3 arrays as is also commonly used (where the x, y, z axes are interleaved). The difference is something
-     * like this for storage of a structure with 8 atoms:
-     *
-     * <pre>
-     *   Nx3: xyzxyzxyzxyzxyzxyzxyzxyz
-     *   3xN: xxxxxxxxyyyyyyyyzzzzzzzz
-     * </pre>
-     * 
-     * The functions can be easily modified, however, to accomodate any data format preference. I chose this format
-     * because it is readily used in vectorized functions (SIMD, Altivec, MMX, SSE2, etc.).
-     * 
-     * @param coords1 reference structure
-     * @param coords2 candidate structure
-     * @param len     the size of the system
-     * @param weight  the weight array of size len, or null to use unweighted coordinates.
-     * 
-     * @param AOut    out parameter: the inner product matrix
+     * @param AOut         out parameter: the inner product matrix
      * 
      * @return (G1 + G2) * 0.5; used as E0 in function
      *         {@link #FastCalcRMSDAndRotation(double[], double[], double[], double, double, double)}.
      */
-    private static double innerProduct(Vector3d[] coords1, Vector3d[] coords2, int len, double[] weight,
-            Matrix3d AOut) {
+    private static double innerProduct(Vector3d[] coords1, Vector3d centroid1, Vector3d[] coords2,
+            Vector3d centroid2, int[] idxsToUse, int numIdxsToUse, double[] weight, Matrix3d AOut) {
         double G1 = 0.0, G2 = 0.0;
 
         AOut.zero();
 
         if (weight != null) {
-            for (int i = 0; i < len; ++i) {
-                double x1 = weight[i] * coords1[i].x;
-                double y1 = weight[i] * coords1[i].y;
-                double z1 = weight[i] * coords1[i].z;
+            for (int i = 0; i < numIdxsToUse; ++i) {
+                int idx = idxsToUse[i];
+                double x1 = coords1[idx].x - centroid1.x;
+                double y1 = coords1[idx].y - centroid1.y;
+                double z1 = coords1[idx].z - centroid1.z;
 
-                G1 += x1 * coords1[i].x + y1 * coords1[i].y + z1 * coords1[i].z;
+                double wx1 = weight[idx] * x1;
+                double wy1 = weight[idx] * y1;
+                double wz1 = weight[idx] * z1;
 
-                double x2 = coords2[i].x;
-                double y2 = coords2[i].y;
-                double z2 = coords2[i].z;
+                G1 += wx1 * x1 + wy1 * y1 + wz1 * z1;
 
-                G2 += weight[i] * (x2 * x2 + y2 * y2 + z2 * z2);
+                double x2 = coords2[idx].x - centroid2.x;
+                double y2 = coords2[idx].y - centroid2.y;
+                double z2 = coords2[idx].z - centroid2.z;
 
-                AOut.m00 += (x1 * x2);
-                AOut.m10 += (x1 * y2);
-                AOut.m20 += (x1 * z2);
+                G2 += weight[idx] * (x2 * x2 + y2 * y2 + z2 * z2);
 
-                AOut.m01 += (y1 * x2);
-                AOut.m11 += (y1 * y2);
-                AOut.m21 += (y1 * z2);
+                AOut.m00 += (wx1 * x2);
+                AOut.m10 += (wx1 * y2);
+                AOut.m20 += (wx1 * z2);
 
-                AOut.m02 += (z1 * x2);
-                AOut.m12 += (z1 * y2);
-                AOut.m22 += (z1 * z2);
+                AOut.m01 += (wy1 * x2);
+                AOut.m11 += (wy1 * y2);
+                AOut.m21 += (wy1 * z2);
+
+                AOut.m02 += (wz1 * x2);
+                AOut.m12 += (wz1 * y2);
+                AOut.m22 += (wz1 * z2);
             }
         } else {
-            for (int i = 0; i < len; ++i) {
-                double x1 = coords1[i].x;
-                double y1 = coords1[i].y;
-                double z1 = coords1[i].z;
+            for (int i = 0; i < numIdxsToUse; ++i) {
+                int idx = idxsToUse[i];
+
+                double x1 = coords1[idx].x - centroid1.x;
+                double y1 = coords1[idx].y - centroid1.y;
+                double z1 = coords1[idx].z - centroid1.z;
 
                 G1 += x1 * x1 + y1 * y1 + z1 * z1;
 
-                double x2 = coords2[i].x;
-                double y2 = coords2[i].y;
-                double z2 = coords2[i].z;
+                double x2 = coords2[idx].x - centroid2.x;
+                double y2 = coords2[idx].y - centroid2.y;
+                double z2 = coords2[idx].z - centroid2.z;
 
                 G2 += (x2 * x2 + y2 * y2 + z2 * z2);
 
@@ -201,15 +203,15 @@ public class JQCP_JOML {
      * @param minScore if( minScore > 0 && rmsd < minScore) then calculate only the rmsd; otherwise, calculate both
      *                 the RMSD & the rotation matrix
      * 
-     * @param rotOut   out parameter: the rotation matrix
+     * @param rotOut   out parameter: the recovered rotation
      * @param rmsdOut  out parameter (double[1]): the RMSD value
      * 
      * @return a value less than or equal to 0 if only the rmsd was calculated (including if the rotation was
      *         smaller than the threshold of precision); or a value greater than 0 if both the RMSD and rotational
      *         matrix were calculated.
      */
-    public static int fastCalcRMSDAndRotation(Matrix3d A, double E0, double len, double minScore, Matrix3d rotOut,
-            double[] rmsdOut) {
+    public static int fastCalcRMSDAndRotation(Matrix3d A, double E0, double len, double minScore,
+            Quaterniond rotOut, double[] rmsdOut) {
 
         double evecprec = 1e-6;
         double evalprec = 1e-11;
@@ -265,7 +267,7 @@ public class JQCP_JOML {
                 + (+(SxypSyx) * (SyzmSzy) + (SxzmSzx) * (SxxmSyy - Szz))
                         * (-(SxymSyx) * (SyzpSzy) + (SxzmSzx) * (SxxpSyy - Szz));
 
-        /* Newton-Raphson */
+        // Newton-Raphson
         double mxEigenV = E0;
         double oldg = 0.0;
         for (int i = 0; i < maxIter; ++i) {
@@ -275,24 +277,23 @@ public class JQCP_JOML {
             double a = b + C1;
             double delta = ((a * mxEigenV + C0) / (2.0 * x2 * mxEigenV + b + a));
             mxEigenV -= delta;
-            /*
-             * System.out.printf("\n diff[%3d]: %16g %16g %16g", i, mxEigenV - oldg, evalprec*mxEigenV, mxEigenV);
-             */
+            System.out.printf("diff[%3d]: %16g %16g %16g\n", i, mxEigenV - oldg, evalprec * mxEigenV, mxEigenV);
             if (Math.abs(mxEigenV - oldg) < Math.abs(evalprec * mxEigenV)) {
                 break;
             }
             if (i == maxIter - 1) {
-                System.err.printf("\nMore than %d iterations needed!\n", maxIter);
+                System.err.printf("More than %d iterations needed!\n", maxIter);
             }
         }
 
-        /* the abs() is to guard against extremely small, but *negative* numbers due to floating point error */
+        // The abs() is to guard against extremely small but *negative* numbers due to floating point error
         double rms = Math.sqrt(Math.abs(2.0 * (E0 - mxEigenV) / len));
         rmsdOut[0] = rms;
         /* System.out.printf("\n\n %16g %16g %16g \n", rms, E0, 2.0 * (E0 - mxEigenV)/len); */
 
         if (minScore > 0) {
             if (rms < minScore) {
+                rotOut.identity();
                 return -1; // Don't bother with rotation.
             }
         }
@@ -371,85 +372,61 @@ public class JQCP_JOML {
         q3 /= normq;
         q4 /= normq;
 
-        double a2 = q1 * q1;
-        double x2 = q2 * q2;
-        double y2 = q3 * q3;
-        double z2 = q4 * q4;
-
-        double xy = q2 * q3;
-        double az = q1 * q4;
-        double zx = q4 * q2;
-        double ay = q1 * q3;
-        double yz = q3 * q4;
-        double ax = q1 * q2;
-
-        // Rotation matrix elements in row-major order
-        double rotOut0 = a2 + x2 - y2 - z2; // xx
-        double rotOut1 = 2 * (xy + az); // xy
-        double rotOut2 = 2 * (zx - ay); // xz
-        double rotOut3 = 2 * (xy - az); // yx
-        double rotOut4 = a2 - x2 + y2 - z2; // yy
-        double rotOut5 = 2 * (yz + ax); // yz
-        double rotOut6 = 2 * (zx + ay); // zx
-        double rotOut7 = 2 * (yz - ax); // zy
-        double rotOut8 = a2 - x2 - y2 + z2; // zz
-
-        // JOML elements are in column-major order
-        rotOut.set(rotOut0, rotOut3, rotOut6, rotOut1, rotOut4, rotOut7, rotOut2, rotOut5, rotOut8);
+        // The recovered quaternion maps frag_1 to frag_2, so need to invert quaternion to map frag_2 onto frag_1
+        // (i.e. use -q1 rather than q1 for w)
+        rotOut.set(q2, q3, q4, -q1);
 
         return 1;
     }
 
     /**
-     * Center the coordinates.
+     * Calculate centroid of points. If you are doing a full superposition (the usual least squares way), you MUST
+     * calculate the centroid of each structure first.
      * 
-     * Warning: If you are doing a full superposition (the usual least squares way), you MUST center each structure
-     * first. That is, you must translate each structure so that its centroid is at the origin. You can use this
-     * method for this.
-     * 
-     * @param coords the coordinates to center.
-     * @param len    the number of coordinates to center.
-     * @param weight the weight array of size len, or null to use unweighted coordinates.
+     * @param coords       the coordinates to find the centroid for.
+     * @param idxsToUse    the indices in the coords and weight arrays to use.
+     * @param numIdxsToUse the number of entries in idxsToUse.
+     * @param weight       the weight array of size len, or null to use unweighted coordinates.
+     * @param centroidOut  out parameter: the centroid
      */
-    public static void centerCoords(Vector3d[] coords, int len, double[] weight) {
-        double xsum = 0.0, ysum = 0.0, zsum = 0.0;
+    private static void calcCentroid(Vector3d[] coords, int[] idxsToUse, int numIdxsToUse, double[] weight,
+            Vector3d centroidOut) {
+        centroidOut.zero();
         if (weight != null) {
             double wsum = 0.0;
-            for (int i = 0; i < len; ++i) {
-                xsum += weight[i] * coords[i].x;
-                ysum += weight[i] * coords[i].y;
-                zsum += weight[i] * coords[i].z;
+            for (int i = 0; i < numIdxsToUse; ++i) {
+                int idx = idxsToUse[i];
 
-                wsum += weight[i];
+                centroidOut.x += weight[idx] * coords[idx].x;
+                centroidOut.y += weight[idx] * coords[idx].y;
+                centroidOut.z += weight[idx] * coords[idx].z;
+
+                wsum += weight[idx];
             }
 
             if (Math.abs(wsum) < 1.0e-30) {
                 throw new IllegalArgumentException("Weights sum to zero");
             }
 
-            xsum /= wsum;
-            ysum /= wsum;
-            zsum /= wsum;
+            centroidOut.x /= wsum;
+            centroidOut.y /= wsum;
+            centroidOut.z /= wsum;
         } else {
-            for (int i = 0; i < len; ++i) {
-                xsum += coords[i].x;
-                ysum += coords[i].y;
-                zsum += coords[i].z;
+            for (int i = 0; i < numIdxsToUse; ++i) {
+                int idx = idxsToUse[i];
+
+                centroidOut.x += coords[idx].x;
+                centroidOut.y += coords[idx].y;
+                centroidOut.z += coords[idx].z;
             }
 
-            if (len == 0) {
+            if (numIdxsToUse == 0) {
                 throw new IllegalArgumentException("len == 0");
             }
 
-            xsum /= len;
-            ysum /= len;
-            zsum /= len;
-        }
-
-        for (int i = 0; i < len; ++i) {
-            coords[i].x -= xsum;
-            coords[i].y -= ysum;
-            coords[i].z -= zsum;
+            centroidOut.x /= numIdxsToUse;
+            centroidOut.y /= numIdxsToUse;
+            centroidOut.z /= numIdxsToUse;
         }
     }
 
@@ -457,36 +434,45 @@ public class JQCP_JOML {
      * Calculate the RMSD & rotational matrix. Superposition coords2 onto coords1 -- in other words, coords2 is
      * rotated, coords1 is held fixed.
      * 
-     * @param coords1 reference structure -- will be centered in-place
-     * @param coords2 candidate structure -- will be centered in-place
-     * @param len     the size of the system
-     * @param weight  the weight array of size len, or null to use unweighted coordinates.
+     * <b>Important:</b> this rotation is calculated about the <i>centroid</> of coords2, so before applying the
+     * rotation matrix, you must subtract the centroid from points in coords2, then add the centroid back again
+     * after rotation. There will also be a translational offset of (centroid2 - centroid1) required to map coords2
+     * to coords1, since the centroid is also subtracted from coords1 before registration.
      * 
-     * @param rotOut  out parameter: the rotation matrix
+     * @param coords1      reference structure.
+     * @param coords2      candidate structure.
+     * @param idxsToUse    the indices in the coords1, coords2 and weight arrays to use.
+     * @param numIdxsToUse the number of entries in idxsToUse.
+     * @param weight       the weight array of size len, or null to use unweighted coordinates.
+     * 
+     * @param rotOut       out parameter: the rotation
+     * @param centroid1Out out parameter: the centroid of coords1.
+     * @param centroid2Out out parameter: the centroid of coords2.
      * 
      * @return RMSD value
      */
-    public static double calcRMSDRotationalMatrix(Vector3d[] coords1, Vector3d[] coords2, int len, double[] weight,
-            Matrix3d rotOut) {
-        /* center the structures -- if precentered you can omit this step */
-        centerCoords(coords1, len, weight);
-        centerCoords(coords2, len, weight);
+    public static double calcRMSDRotation(Vector3d[] coords1, Vector3d[] coords2, int[] idxsToUse, int numIdxsToUse,
+            double[] weight, Quaterniond rotOut, Vector3d centroid1Out, Vector3d centroid2Out) {
+        // Find centroid of the structures
+        calcCentroid(coords1, idxsToUse, numIdxsToUse, weight, centroid1Out);
+        calcCentroid(coords2, idxsToUse, numIdxsToUse, weight, centroid2Out);
 
         double wsum;
         if (weight == null) {
-            wsum = len;
+            wsum = numIdxsToUse;
         } else {
             wsum = 0.0;
-            for (int i = 0; i < len; ++i) {
-                wsum += weight[i];
+            for (int i = 0; i < numIdxsToUse; ++i) {
+                int idx = idxsToUse[i];
+                wsum += weight[idx];
             }
         }
 
-        /* calculate the (weighted) inner product of two structures */
+        // Calculate the (weighted) inner product of two structures
         Matrix3d A = new Matrix3d();
-        double E0 = innerProduct(coords1, coords2, len, weight, A);
+        double E0 = innerProduct(coords1, centroid1Out, coords2, centroid2Out, idxsToUse, numIdxsToUse, weight, A);
 
-        /* calculate the RMSD & rotational matrix */
+        // Calculate the RMSD & rotation
         double[] rmsd = new double[1];
         fastCalcRMSDAndRotation(A, E0, wsum, -1, rotOut, rmsd);
 
@@ -537,51 +523,58 @@ public class JQCP_JOML {
      */
     public static void main(String[] args) {
         int len = 7;
-        Vector3d[] frag_a = new Vector3d[len];
-        Vector3d[] frag_b = new Vector3d[len];
+        Vector3d[] frag_1 = new Vector3d[len];
+        Vector3d[] frag_2 = new Vector3d[len];
 
-        frag_a[0] = new Vector3d(-2.803, -15.373, 24.556);
-        frag_a[1] = new Vector3d(0.893, -16.062, 25.147);
-        frag_a[2] = new Vector3d(1.368, -12.371, 25.885);
-        frag_a[3] = new Vector3d(-1.651, -12.153, 28.177);
-        frag_a[4] = new Vector3d(-0.440, -15.218, 30.068);
-        frag_a[5] = new Vector3d(2.551, -13.273, 31.372);
-        frag_a[6] = new Vector3d(0.105, -11.330, 33.567);
+        frag_1[0] = new Vector3d(-2.803, -15.373, 24.556);
+        frag_1[1] = new Vector3d(0.893, -16.062, 25.147);
+        frag_1[2] = new Vector3d(1.368, -12.371, 25.885);
+        frag_1[3] = new Vector3d(-1.651, -12.153, 28.177);
+        frag_1[4] = new Vector3d(-0.440, -15.218, 30.068);
+        frag_1[5] = new Vector3d(2.551, -13.273, 31.372);
+        frag_1[6] = new Vector3d(0.105, -11.330, 33.567);
 
-        frag_b[0] = new Vector3d(-14.739, -18.673, 15.040);
-        frag_b[1] = new Vector3d(-12.473, -15.810, 16.074);
-        frag_b[2] = new Vector3d(-14.802, -13.307, 14.408);
-        frag_b[3] = new Vector3d(-17.782, -14.852, 16.171);
-        frag_b[4] = new Vector3d(-16.124, -14.617, 19.584);
-        frag_b[5] = new Vector3d(-15.029, -11.037, 18.902);
-        frag_b[6] = new Vector3d(-18.577, -10.001, 17.996);
+        frag_2[0] = new Vector3d(-14.739, -18.673, 15.040);
+        frag_2[1] = new Vector3d(-12.473, -15.810, 16.074);
+        frag_2[2] = new Vector3d(-14.802, -13.307, 14.408);
+        frag_2[3] = new Vector3d(-17.782, -14.852, 16.171);
+        frag_2[4] = new Vector3d(-16.124, -14.617, 19.584);
+        frag_2[5] = new Vector3d(-15.029, -11.037, 18.902);
+        frag_2[6] = new Vector3d(-18.577, -10.001, 17.996);
 
         double[] weight = new double[len];
+        int[] idxsToUse = new int[len];
         for (int i = 0; i < len; ++i) {
             weight[i] = i + 1.0;
+            idxsToUse[i] = i;
         }
 
         System.out.printf("\nCoords before centering:\n");
 
-        printCoords(frag_a, len);
-        printCoords(frag_b, len);
+        printCoords(frag_1, len);
+        printCoords(frag_2, len);
 
-        Matrix3d rotmat = new Matrix3d();
-        double rmsd = calcRMSDRotationalMatrix(frag_a, frag_b, len, weight, rotmat);
+        Quaterniond rot = new Quaterniond();
+        Vector3d centroid1 = new Vector3d();
+        Vector3d centroid2 = new Vector3d();
+        double rmsd = calcRMSDRotation(frag_1, frag_2, idxsToUse, len, weight, rot, centroid1, centroid2);
 
         System.out.printf("\nCoords after centering:\n");
 
-        printCoords(frag_a, len);
-        printCoords(frag_b, len);
+        printCoords(frag_1, len);
+        printCoords(frag_2, len);
 
         System.out.printf("\nQCP rmsd: %f\n", rmsd);
 
         System.out.printf("\nQCP Rotation matrix:\n");
-        Mat3Print(rotmat);
+        Mat3Print(rot.get(new Matrix3d()));
 
-        /* apply rotation matrix */
+        System.out.printf("\nQCP quaternion:\n" + rot.w + "\t" + rot.x + "\t" + rot.y + "\t" + rot.z);
+
+        // Apply rotation matrix
         for (int i = 0; i < len; ++i) {
-            rotmat.transform(frag_b[i]);
+            // Modify frag_2 in place to register it to frag1 
+            rot.transform(frag_2[i].sub(centroid2)).add(centroid1);
         }
 
         /* calculate euclidean distance */
@@ -589,12 +582,12 @@ public class JQCP_JOML {
         double wtsum = 0.0;
         for (int i = 0; i < len; ++i) {
             wtsum += weight[i];
-            double tmp = frag_a[i].distanceSquared(frag_b[i]);
+            double tmp = frag_1[i].distanceSquared(frag_2[i]);
             euc_dist += weight[i] * tmp;
         }
 
         System.out.printf("\nCoords 2 after rotation:\n");
-        printCoords(frag_b, len);
+        printCoords(frag_2, len);
 
         System.out.printf("\nExplicit RMSD calculated from transformed coords: %f\n\n",
                 Math.sqrt(euc_dist / wtsum));
